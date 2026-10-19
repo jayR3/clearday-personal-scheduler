@@ -1,0 +1,17 @@
+{
+  "name": "clearday-personal-scheduler",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@azure/msal-browser": "5.25.0"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
+  }
+}

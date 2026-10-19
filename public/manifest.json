@@ -1,0 +1,9 @@
+{
+  "name": "ClearDay — personal schedule",
+  "short_name": "ClearDay",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f4f0",
+  "theme_color": "#f5f4f0",
+  "description": "A private, local-first schedule and availability planner."
+}

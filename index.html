@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f4f0">
+  <meta name="description" content="A private, local-first schedule and availability planner.">
+  <title>ClearDay — your time, in view</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="ClearDay home"><span class="brand-mark">c</span><span>clearday</span></a>
+      <div class="topbar-right">
+        <span class="privacy-note"><span class="privacy-dot"></span>Saved on this device</span>
+        <button class="button button-quiet" id="backupButton" type="button">Backup</button>
+        <button class="button button-quiet" id="importButton" type="button">Restore</button>
+        <button class="button button-quiet" id="settingsButton" type="button">Calendar setup</button>
+        <input id="importFile" type="file" accept="application/json" hidden>
+      </div>
+    </header>
+    <main>
+      <section class="intro">
+        <div><p class="eyebrow" id="todayLabel">YOUR DAY, WITH ROOM TO BREATHE</p><h1>Make space for what matters.</h1><p class="intro-copy">See your commitments before you say yes. Find open time in seconds.</p></div>
+        <button class="button button-primary add-main" id="openAddButton" type="button"><span aria-hidden="true">＋</span> Add commitment</button>
+      </section>
+      <section class="dashboard">
+        <div class="calendar-panel panel">
+          <div class="calendar-heading">
+            <div><p class="eyebrow">YOUR SCHEDULE</p><h2 id="monthTitle"></h2></div>
+            <div class="month-controls"><button class="icon-button" id="prevMonth" type="button" aria-label="Previous month">‹</button><button class="button button-today" id="todayButton" type="button">Today</button><button class="icon-button" id="nextMonth" type="button" aria-label="Next month">›</button></div>
+          </div>
+          <div class="calendar-grid" id="calendarGrid" aria-label="Monthly calendar"></div>
+          <div class="calendar-foot">
+            <div class="legend"><span><i class="legend-dot dot-class"></i>Study</span><span><i class="legend-dot dot-work"></i>Work</span><span><i class="legend-dot dot-health"></i>Health</span><span><i class="legend-dot dot-family"></i>Family</span><span><i class="legend-dot dot-faith"></i>Faith</span><span><i class="legend-dot dot-other"></i>Other</span></div>
+            <button class="text-button" id="exportButton" type="button">Export .ics calendar ↗</button>
+          </div>
+        </div>
+        <aside class="side-column">
+          <section class="panel day-panel">
+            <div class="panel-heading"><div><p class="eyebrow">SELECTED DAY</p><h2 id="selectedDateTitle"></h2></div><button class="icon-button small" id="addForDay" type="button" aria-label="Add commitment on selected day">＋</button></div>
+            <div id="dayEvents" class="day-events"></div>
+          </section>
+          <section class="panel availability-panel">
+            <div class="panel-heading availability-heading"><div><p class="eyebrow">SCHEDULE CHECK</p><h2>Before you say yes</h2></div><span class="spark-icon" aria-hidden="true">✳</span></div>
+            <p class="small-copy">This checks commitments in ClearDay and calendar blocks you have imported. It is a rules-based check, not AI; confirm the details before accepting.</p>
+            <form id="availabilityForm" class="availability-form">
+              <label class="field-label" for="requestText">Quick request <span class="muted">(optional)</span></label>
+              <input id="requestText" class="text-input" type="text" placeholder="e.g. 4 hours tomorrow, before 6pm" autocomplete="off">
+              <div class="field-row"><label class="field-label" for="duration">Hours needed</label><label class="field-label" for="daysAhead">Look ahead</label></div>
+              <div class="field-row">
+                <select id="duration" class="text-input"><option value="1">1 hour</option><option value="2">2 hours</option><option value="3">3 hours</option><option value="4" selected>4 hours</option><option value="6">6 hours</option><option value="8">8 hours</option></select>
+                <select id="daysAhead" class="text-input"><option value="1">Tomorrow</option><option value="3">Next 3 days</option><option value="7" selected>Next 7 days</option><option value="14">Next 14 days</option><option value="30">Next 30 days</option></select>
+              </div>
+              <div class="field-row time-row"><label class="field-label" for="dayStart">From</label><label class="field-label" for="dayEnd">Until</label><label class="field-label" for="buffer">Buffer</label></div>
+              <div class="field-row time-row"><input id="dayStart" class="text-input" type="time" value="08:00"><input id="dayEnd" class="text-input" type="time" value="20:00"><select id="buffer" class="text-input"><option value="0">0 min</option><option value="15" selected>15 min</option><option value="30">30 min</option></select></div>
+              <button class="button button-primary full-width" type="submit">Find open times <span aria-hidden="true">→</span></button>
+            </form>
+            <div id="availabilityResults" class="availability-results" aria-live="polite"></div>
+          </section>
+          <section class="panel calendar-connect-panel">
+            <div class="panel-heading"><div><p class="eyebrow">OPTIONAL CALENDAR IMPORT</p><h2>Keep schedules together</h2></div><span class="calendar-icon" aria-hidden="true">▦</span></div>
+            <p class="small-copy">Import busy times from Google or Outlook when you choose. ClearDay requests read access only and hides event titles. Nothing syncs in the background.</p>
+            <div class="provider-row"><div><strong>Google Calendar</strong><span id="googleStatus">Not configured</span></div><button class="button button-secondary" id="googleSyncButton" type="button">Set up</button></div>
+            <div class="provider-row"><div><strong>Outlook Calendar</strong><span id="outlookStatus">Not configured</span></div><button class="button button-secondary" id="outlookSyncButton" type="button">Set up</button></div>
+            <button class="text-button privacy-action" id="privacyButton" type="button">Privacy, disconnect and delete data</button>
+          </section>
+        </aside>
+      </section>
+      <section class="principles"><span class="principle-number">01</span><p><strong>Put fixed commitments in first.</strong> Classes, shifts, travel, sleep, prayer and family time make availability honest.</p><span class="principle-divider"></span><span class="principle-number">02</span><p><strong>Check before you commit.</strong> Imported calendar blocks refresh only when you press Sync.</p></section>
+    </main>
+    <footer><span>ClearDay · a small tool for a steadier life</span><span>Your schedule stays in this browser. Back it up before changing devices.</span></footer>
+  </div>
+  <dialog id="eventDialog" class="modal">
+    <form id="eventForm" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">PROTECT YOUR TIME</p><h2 id="dialogTitle">Add a commitment</h2></div><button class="icon-button" id="closeDialog" type="button" aria-label="Close">×</button></div>
+      <input id="eventId" type="hidden">
+      <label class="field-label" for="eventTitle">What is it?</label><input id="eventTitle" class="text-input" type="text" maxlength="80" placeholder="e.g. Lecture, Samara shift, family call" required>
+      <div class="field-row">
+        <div><label class="field-label" for="eventDate">Date</label><input id="eventDate" class="text-input" type="date" required></div>
+        <div><label class="field-label" for="eventCategory">Area</label><select id="eventCategory" class="text-input"><option value="class">Study</option><option value="work">Work</option><option value="health">Health</option><option value="family">Family</option><option value="faith">Faith</option><option value="other">Other</option></select></div>
+      </div>
+      <div class="field-row">
+        <div><label class="field-label" for="eventStart">Starts</label><input id="eventStart" class="text-input" type="time" value="09:00" required></div>
+        <div><label class="field-label" for="eventEnd">Ends</label><input id="eventEnd" class="text-input" type="time" value="10:00" required></div>
+      </div>
+      <div class="recurrence-row"><label class="check-label"><input id="eventWeekly" type="checkbox"> Repeat every week</label><div id="repeatUntilWrap" class="repeat-until" hidden><label class="field-label" for="repeatUntil">Repeat until</label><input id="repeatUntil" class="text-input" type="date"></div></div>
+      <label class="field-label" for="eventNotes">Notes <span class="muted">(optional; stored in this browser)</span></label><input id="eventNotes" class="text-input" type="text" maxlength="120" placeholder="Room or travel time — avoid sensitive details">
+      <div class="modal-actions"><button class="button button-danger" id="deleteEvent" type="button" hidden>Delete</button><span class="action-spacer"></span><button class="button button-quiet" id="cancelDialog" type="button">Cancel</button><button class="button button-primary" id="saveEvent" type="submit">Save commitment</button></div>
+      <p class="form-error" id="formError" role="alert"></p>
+    </form>
+  </dialog>
+  <dialog id="calendarSettingsDialog" class="modal settings-modal">
+    <form id="calendarSettingsForm" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">OPTIONAL SETUP</p><h2>Connect your calendar</h2></div><button class="icon-button" id="closeSettings" type="button" aria-label="Close">×</button></div>
+      <p class="settings-intro">Create your own free OAuth app IDs in Google Cloud or Microsoft Entra. IDs are saved only in this browser; never paste a client secret here. ClearDay uses read-only access and asks you to sync manually.</p>
+      <label class="field-label" for="googleClientId">Google OAuth client ID</label><input id="googleClientId" class="text-input" type="text" inputmode="email" placeholder="000000000000-abc.apps.googleusercontent.com" autocomplete="off">
+      <label class="field-label" for="microsoftClientId">Microsoft app (client) ID</label><input id="microsoftClientId" class="text-input" type="text" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off">
+      <div class="settings-links"><a href="https://developers.google.com/calendar/api/quickstart/js" target="_blank" rel="noopener noreferrer">Google Calendar setup guide ↗</a><a href="https://learn.microsoft.com/entra/identity-platform/quickstart-single-page-app-javascript-sign-in" target="_blank" rel="noopener noreferrer">Microsoft Entra SPA setup guide ↗</a></div>
+      <div class="redirect-note">OAuth redirect address for Microsoft: <code id="redirectUriLabel"></code><br>Google authorized JavaScript origin: <code id="originLabel"></code></div>
+      <div class="modal-actions"><span class="action-spacer"></span><button class="button button-quiet" id="cancelSettings" type="button">Cancel</button><button class="button button-primary" type="submit">Save setup</button></div>
+      <p class="form-error" id="settingsError" role="alert"></p>
+    </form>
+  </dialog>
+  <dialog id="privacyDialog" class="modal settings-modal">
+    <form method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">YOUR DATA</p><h2>Privacy and storage</h2></div><button class="icon-button" id="closePrivacy" type="button" aria-label="Close">×</button></div>
+      <div class="privacy-details"><p><strong>Your schedule:</strong> saved in this browser’s local storage. ClearDay does not upload it to the GitHub repository or an app server.</p><p><strong>Calendar access:</strong> imported only when you press Sync. ClearDay asks for busy times, not titles or notes. OAuth tokens are handled by Google in memory or Microsoft’s MSAL browser cache.</p><p><strong>Backups:</strong> downloaded JSON contains your schedule and may include private calendar event IDs. Keep it somewhere private. Do not share it or put it in GitHub.</p><p><strong>Disconnect:</strong> removes imported busy blocks and saved client IDs from this browser. For full revocation, also remove ClearDay from your Google Account or Microsoft account permissions.</p><p><strong>Delete schedule:</strong> permanently removes this browser’s schedule. Download a backup first if you may need it later.</p></div>
+      <div class="modal-actions privacy-actions"><button class="button button-secondary" id="disconnectCalendars" type="button">Disconnect calendars</button><button class="button button-danger" id="clearSchedule" type="button">Delete schedule</button><span class="action-spacer"></span><button class="button button-quiet" id="donePrivacy" type="submit">Done</button></div>
+      <p class="form-error" id="privacyStatus" role="status"></p>
+    </form>
+  </dialog>
+  <script async defer src="https://accounts.google.com/gsi/client"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
