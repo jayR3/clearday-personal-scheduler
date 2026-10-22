@@ -5,7 +5,7 @@ ClearDay is a personal, local-first schedule and availability planner. It has no
 ## Start using ClearDay
 
 1. Open [ClearDay on GitHub Pages](https://jayr3.github.io/clearday-personal-scheduler/).
-2. Add recurring classes and other fixed commitments first. Include shifts, travel, sleep, appointments, faith and family time that affect whether you can take work.
+2. Add recurring classes and other fixed commitments first. Include shifts, travel, sleep, appointments, faith and family time that affect whether you can take work. Switch to **Week** to see the commitments and open blocks day by day.
 3. Use **Calendar setup** if you want to import busy times from Google Calendar or Outlook. The import is optional and runs only when you press **Sync now**.
 4. When someone asks you to work, enter the time required and when you can work, then press **Find open times**. Press **Block** for a suggested slot you want to hold while you confirm it.
 5. Before accepting, check the date, start and end times against the original request. The app only knows what you entered or imported.
@@ -13,8 +13,9 @@ ClearDay is a personal, local-first schedule and availability planner. It has no
 
 ## What it does
 
-- Month calendar and selected-day list with Study, Work, Health, Family, Faith and Other categories.
-- One-off commitments and weekly repeats, with an overlap warning before saving.
+- Month calendar and Week agenda, with Study, Work, Health, Family, Faith and Other categories.
+- One-off and weekly commitments, including shifts that cross midnight. Overnight blocks appear on both dates and trigger overlap warnings on either day.
+- Week view shows commitments and free blocks of 30 minutes or more within the same daily time window and buffer used by the availability checker.
 - Availability search for continuous open blocks up to 12 hours, over the next 1–30 days, with a daily time window and a buffer around events.
 - A typed quick request can override duration, horizon, start time (for example, `after 10am`) and end time (for example, `before 6pm`). Pressing Enter runs the availability search. It does not create an event.
 - Optional, manual import of busy times from the primary Google calendar or default Outlook calendar. Sync imports approximately 30 days of recent events through one year ahead. Imported titles, notes and descriptions are not requested or displayed.

@@ -4,7 +4,7 @@ import { CalendarSync } from "./calendar-sync.js";
   "use strict";
 
   const KEY = "clearday.events.v1";
-  const state = { events: readEvents(), month: first(new Date()), selected: key(new Date()) };
+  const state = { events: readEvents(), month: first(new Date()), selected: key(new Date()), view: "month", weekStart: week(new Date()) };
   const $ = (id) => document.getElementById(id);
   const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -14,10 +14,15 @@ import { CalendarSync } from "./calendar-sync.js";
       return Array.isArray(value) ? value.filter(validEvent) : [];
     } catch (_) { return []; }
   }
+  function validTime(value) {
+    if (!/^\d{2}:\d{2}$/.test(value || "")) return false;
+    const parts = value.split(":").map(Number);
+    return parts[0] < 24 && parts[1] < 60;
+  }
   function validEvent(event) {
     return event && typeof event.id === "string" && typeof event.title === "string" &&
-      /^\d{4}-\d{2}-\d{2}$/.test(event.date) && /^\d{2}:\d{2}$/.test(event.start) &&
-      /^\d{2}:\d{2}$/.test(event.end) && event.end > event.start;
+      /^\d{4}-\d{2}-\d{2}$/.test(event.date) && validTime(event.start) && validTime(event.end) &&
+      (!event.weekly || (/^\d{4}-\d{2}-\d{2}$/.test(event.repeatUntil) && event.repeatUntil >= event.date));
   }
   function save() {
     try {
@@ -43,71 +48,202 @@ import { CalendarSync } from "./calendar-sync.js";
   function time(d) { return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
   function cat(event) { return `cat-${event.category || "other"}`; }
   function isImported(event) { return Boolean(event.providerOrigin); }
+  function eventEnd(start, event) {
+    const end = date(key(start), event.end);
+    if (end <= start) end.setDate(end.getDate() + 1);
+    return end;
+  }
+  function durationLabel(milliseconds) {
+    const minutes = Math.round(milliseconds / 60000);
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    return hours ? hours + "h" + (remainder ? " " + remainder + "m" : "") : remainder + "m";
+  }
 
   function instances(from, to) {
     const output = [];
     state.events.forEach((event) => {
       const start = date(event.date, event.start);
-      const end = date(event.date, event.end);
       if (!event.weekly) {
+        const end = eventEnd(start, event);
         if (start < to && end > from) output.push({ e: event, s: start, z: end, d: event.date });
         return;
       }
       const lastDate = event.repeatUntil || event.date;
-      const endClock = event.end.split(":").map(Number);
       for (let occurrence = new Date(start); occurrence < to && key(occurrence) <= lastDate; occurrence = plus(occurrence, 7)) {
-        const occurrenceEnd = new Date(occurrence);
-        occurrenceEnd.setHours(endClock[0] || 0, endClock[1] || 0, 0, 0);
+        const occurrenceEnd = eventEnd(occurrence, event);
         if (occurrence < to && occurrenceEnd > from) output.push({ e: event, s: new Date(occurrence), z: occurrenceEnd, d: key(occurrence) });
       }
     });
     return output.sort((a, b) => a.s - b.s);
   }
 
+  function openIntervals(dayKey, startClock, endClock, buffer) {
+    if (!startClock || !endClock || endClock <= startClock) return [];
+    const dayStart = date(dayKey, startClock);
+    const dayEnd = date(dayKey, endClock);
+    const now = new Date();
+    const low = key(now) === dayKey && now > dayStart ? now : dayStart;
+    if (dayEnd <= low) return [];
+    const padding = Math.max(0, Number(buffer) || 0) * 60000;
+    const blocks = instances(low, dayEnd)
+      .map((item) => ({
+        s: new Date(Math.max(low.getTime(), item.s.getTime() - padding)),
+        z: new Date(Math.min(dayEnd.getTime(), item.z.getTime() + padding))
+      }))
+      .filter((item) => item.z > item.s)
+      .sort((a, b) => a.s - b.s);
+    const gaps = [];
+    let cursor = low;
+    blocks.forEach((block) => {
+      if (block.s > cursor && block.s - cursor >= 30 * 60000) gaps.push({ s: new Date(cursor), z: new Date(block.s) });
+      if (block.z > cursor) cursor = block.z;
+    });
+    if (dayEnd - cursor >= 30 * 60000) gaps.push({ s: new Date(cursor), z: new Date(dayEnd) });
+    return gaps;
+  }
+
+  function renderSelectedDay() {
+    const selectedDay = date(state.selected);
+    const selectedDayEnd = plus(selectedDay, 1);
+    $("selectedDateTitle").textContent = nice(selectedDay);
+    const dayItems = instances(selectedDay, selectedDayEnd);
+    $("dayEvents").innerHTML = dayItems.length ? dayItems.map((item) => {
+      const continuesFromEarlier = item.s < selectedDay;
+      const segmentStart = continuesFromEarlier ? selectedDay : item.s;
+      const segmentEnd = item.z > selectedDayEnd ? selectedDayEnd : item.z;
+      const meta = isImported(item.e)
+        ? "Busy time · " + safe(item.e.providerOrigin)
+        : (item.e.weekly ? "Weekly" : "Commitment") + (item.e.notes ? " · " + safe(item.e.notes) : "");
+      const continuity = (continuesFromEarlier ? " · continues from prior day" : "") + (item.z > selectedDayEnd ? " · continues next day" : "");
+      const action = isImported(item.e) ? "" : '<button class="event-edit" data-edit="' + safe(item.e.id) + '" aria-label="Edit ' + safe(item.e.title) + '">···</button>';
+      return '<div class="event-row"><div class="event-time">' + (continuesFromEarlier ? "Continues" : tm(segmentStart)) + '<br><span>to ' + tm(segmentEnd) + (item.z > selectedDayEnd ? ' · midnight' : '') + '</span></div><i class="event-rail ' + cat(item.e) + '"></i><div><div class="event-name">' + safe(item.e.title) + '</div><div class="event-meta">' + meta + safe(continuity) + '</div></div>' + action + '</div>';
+    }).join("") : '<div class="empty-day">Nothing scheduled yet. Add your fixed commitments first, then check availability here.</div>';
+    $("dayEvents").querySelectorAll("[data-edit]").forEach((button) => { button.onclick = () => edit(button.dataset.edit); });
+  }
+
   function render() {
+    const isWeek = state.view === "week";
+    const today = key(new Date());
+    $("monthViewButton").classList.toggle("active", !isWeek);
+    $("weekViewButton").classList.toggle("active", isWeek);
+    $("monthViewButton").setAttribute("aria-pressed", String(!isWeek));
+    $("weekViewButton").setAttribute("aria-pressed", String(isWeek));
+    $("prevMonth").setAttribute("aria-label", isWeek ? "Previous week" : "Previous month");
+    $("nextMonth").setAttribute("aria-label", isWeek ? "Next week" : "Next month");
+    $("calendarGrid").hidden = isWeek;
+    $("weekGrid").hidden = !isWeek;
+
+    if (isWeek) {
+      const weekStart = state.weekStart || week(date(state.selected));
+      const weekEnd = plus(weekStart, 6);
+      const startLabel = weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      const endLabel = weekEnd.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      $("monthTitle").textContent = startLabel + " – " + endLabel + ", " + weekEnd.getFullYear();
+      const startClock = $("dayStart").value || "08:00";
+      const endClock = $("dayEnd").value || "20:00";
+      const buffer = Number($("buffer").value) || 0;
+      const validWindow = endClock > startClock;
+      const windowText = validWindow
+        ? tm(date(key(weekStart), startClock)) + "–" + tm(date(key(weekStart), endClock))
+        : "a same-day window";
+      const days = Array.from({ length: 7 }, (_, index) => plus(weekStart, index));
+      const rows = days.map((day) => {
+        const dayKey = key(day);
+        const dayStart = date(dayKey);
+        const dayEnd = plus(dayStart, 1);
+        const dayItems = instances(dayStart, dayEnd);
+        const now = new Date();
+        const past = dayEnd <= now;
+        const gaps = validWindow && !past ? openIntervals(dayKey, startClock, endClock, buffer) : [];
+        const total = gaps.reduce((sum, gap) => sum + gap.z - gap.s, 0);
+        const totalText = past ? "Past" : validWindow ? durationLabel(total) + " open" : "Set hours";
+        const commitments = dayItems.length ? dayItems.map((item) => {
+          const continuesFromEarlier = item.s < dayStart;
+          const segmentEnd = item.z > dayEnd ? dayEnd : item.z;
+          const timeText = continuesFromEarlier
+            ? "Continues · to " + tm(segmentEnd)
+            : tm(item.s) + "–" + tm(item.z) + (key(item.z) !== dayKey ? " · next day" : "");
+          const body = '<strong>' + safe(timeText) + '</strong><span>' + safe(item.e.title) + '</span>';
+          return isImported(item.e)
+            ? '<div class="week-event ' + cat(item.e) + ' imported-week-event">' + body + '<small>Busy time · ' + safe(item.e.providerOrigin) + '</small></div>'
+            : '<button class="week-event ' + cat(item.e) + '" data-edit="' + safe(item.e.id) + '" data-day="' + dayKey + '">' + body + '</button>';
+        }).join("") : '<div class="week-empty">No commitments</div>';
+        const open = gaps.length
+          ? gaps.map((gap) => '<div class="week-open-block"><strong>' + safe(tm(gap.s)) + '–' + safe(tm(gap.z)) + '</strong><span>' + safe(durationLabel(gap.z - gap.s)) + ' free</span></div>').join("")
+          : '<div class="week-empty">' + (past ? "Past day" : validWindow ? "No open block of 30+ minutes" : "Choose an end time after the start") + '</div>';
+        const classes = ["week-day-row"];
+        if (dayKey === today) classes.push("today");
+        if (dayKey === state.selected) classes.push("selected");
+        return '<section class="' + classes.join(" ") + '"><div class="week-day-aside"><button class="week-day-date" data-select="' + dayKey + '">' + safe(nice(day, { weekday: "short", day: "numeric", month: "short" })) + '</button><span class="week-day-open-total">' + safe(totalText) + '</span></div><div class="week-day-column"><p class="week-column-label">Commitments</p><div class="week-events-list">' + commitments + '</div></div><div class="week-day-column"><p class="week-column-label">Free time · 30+ min</p><div class="week-open-list">' + open + '</div></div></section>';
+      }).join("");
+      const note = validWindow
+        ? "Free time shown within " + windowText + ", with a " + buffer + "-minute buffer around commitments. Change these under Schedule Check."
+        : "Set a same-day time window under Schedule Check to see free spaces.";
+      $("weekGrid").innerHTML = '<p class="week-agenda-note">' + safe(note) + '</p>' + rows;
+      $("weekGrid").querySelectorAll("[data-select]").forEach((button) => {
+        button.onclick = () => {
+          state.selected = button.dataset.select;
+          state.month = first(date(state.selected));
+          render();
+        };
+      });
+      $("weekGrid").querySelectorAll("[data-edit]").forEach((button) => {
+        button.onclick = () => edit(button.dataset.edit);
+      });
+      renderSelectedDay();
+      return;
+    }
+
     const month = state.month;
     const firstDay = week(month);
-    const today = key(new Date());
     const days = Array.from({ length: 42 }, (_, index) => plus(firstDay, index));
-    let html = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map((label) => `<div class="weekday">${label}</div>`).join("");
+    let html = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map((label) => '<div class="weekday">' + label + '</div>').join("");
     $("monthTitle").textContent = month.toLocaleDateString(undefined, { month: "long", year: "numeric" });
     const monthEvents = instances(days[0], plus(days[41], 1));
 
     days.forEach((day) => {
       const dayKey = key(day);
+      const dayStart = date(dayKey);
+      const dayEnd = plus(dayStart, 1);
       const classes = ["calendar-day"];
-      const items = monthEvents.filter((item) => item.d === dayKey);
+      const items = monthEvents.filter((item) => item.s < dayEnd && item.z > dayStart);
       if (day.getMonth() !== month.getMonth()) classes.push("outside");
       if (dayKey === today) classes.push("today");
       if (dayKey === state.selected) classes.push("selected");
       let chips = items.slice(0, 3).map((item) => {
-        const label = safe(`${tm(item.s)} ${item.e.title}`);
+        const startsToday = item.s >= dayStart && item.s < dayEnd;
+        const label = startsToday
+          ? tm(item.s) + " " + item.e.title + (key(item.z) !== dayKey ? " ↗" : "")
+          : "↳ " + item.e.title + " · " + tm(item.z);
+        const chipClass = startsToday ? "" : " continuation-chip";
         return isImported(item.e)
-          ? `<span class="event-chip ${cat(item.e)} imported-chip" title="Busy time imported from ${safe(item.e.providerOrigin)}">${label}</span>`
-          : `<button class="event-chip ${cat(item.e)}" data-edit="${safe(item.e.id)}" title="${safe(item.e.title)}">${label}</button>`;
+          ? '<span class="event-chip ' + cat(item.e) + chipClass + ' imported-chip" title="Busy time imported from ' + safe(item.e.providerOrigin) + '">' + safe(label) + '</span>'
+          : '<button class="event-chip ' + cat(item.e) + chipClass + '" data-edit="' + safe(item.e.id) + '" title="' + safe(item.e.title) + '">' + safe(label) + '</button>';
       }).join("");
-      if (items.length > 3) chips += `<span class="more-chip">+${items.length - 3} more</span>`;
-      html += `<div class="${classes.join(" ")}"><button class="date-number" data-select="${dayKey}">${day.getDate()}</button>${chips}</div>`;
+      if (items.length > 3) chips += '<span class="more-chip">+' + (items.length - 3) + ' more</span>';
+      html += '<div class="' + classes.join(" ") + '"><button class="date-number" data-select="' + dayKey + '">' + day.getDate() + '</button>' + chips + '</div>';
     });
     $("calendarGrid").innerHTML = html;
     $("calendarGrid").querySelectorAll("[data-select]").forEach((button) => {
-      button.onclick = () => { state.selected = button.dataset.select; render(); };
+      button.onclick = () => { state.selected = button.dataset.select; state.weekStart = week(date(state.selected)); render(); };
     });
     $("calendarGrid").querySelectorAll("[data-edit]").forEach((button) => {
       button.onclick = () => edit(button.dataset.edit);
     });
 
-    $("selectedDateTitle").textContent = nice(date(state.selected));
-    const dayItems = instances(date(state.selected), plus(date(state.selected), 1));
-    $("dayEvents").innerHTML = dayItems.length ? dayItems.map((item) => {
-      const meta = isImported(item.e) ? `Busy time · ${safe(item.e.providerOrigin)}` : `${item.e.weekly ? "Weekly" : "Commitment"}${item.e.notes ? ` · ${safe(item.e.notes)}` : ""}`;
-      const action = isImported(item.e) ? "" : `<button class="event-edit" data-edit="${safe(item.e.id)}" aria-label="Edit ${safe(item.e.title)}">···</button>`;
-      return `<div class="event-row"><div class="event-time">${tm(item.s)}<br><span>to ${tm(item.z)}</span></div><i class="event-rail ${cat(item.e)}"></i><div><div class="event-name">${safe(item.e.title)}</div><div class="event-meta">${meta}</div></div>${action}</div>`;
-    }).join("") : '<div class="empty-day">Nothing scheduled yet. Add your fixed commitments first, then check availability here.</div>';
-    $("dayEvents").querySelectorAll("[data-edit]").forEach((button) => { button.onclick = () => edit(button.dataset.edit); });
+    renderSelectedDay();
   }
 
   function repeatToggle() { $("repeatUntilWrap").hidden = !$("eventWeekly").checked; }
+  function updateOvernightHint() {
+    const start = $("eventStart").value;
+    const end = $("eventEnd").value;
+    if (!start || !end) $("overnightHint").textContent = "If the end time is earlier, this commitment ends the following day.";
+    else if (start === end) $("overnightHint").textContent = "Same start and end time means a 24-hour commitment.";
+    else if (end < start) $("overnightHint").textContent = "Overnight commitment · ends the following day and blocks that morning.";
+    else $("overnightHint").textContent = "Same-day commitment.";
+  }
   function openAdd(dayKey) {
     $("eventForm").reset();
     $("eventId").value = "";
@@ -119,12 +255,16 @@ import { CalendarSync } from "./calendar-sync.js";
     $("deleteEvent").hidden = true;
     $("formError").textContent = "";
     repeatToggle();
+    updateOvernightHint();
     $("eventDialog").showModal();
     $("eventTitle").focus();
   }
   function edit(id) {
     const event = state.events.find((item) => item.id === id);
     if (!event || isImported(event)) return;
+    state.selected = event.date;
+    state.month = first(date(event.date));
+    state.weekStart = week(date(event.date));
     $("eventId").value = event.id;
     $("dialogTitle").textContent = "Edit commitment";
     $("eventTitle").value = event.title;
@@ -138,6 +278,7 @@ import { CalendarSync } from "./calendar-sync.js";
     $("deleteEvent").hidden = false;
     $("formError").textContent = "";
     repeatToggle();
+    updateOvernightHint();
     $("eventDialog").showModal();
   }
 
@@ -146,7 +287,7 @@ import { CalendarSync } from "./calendar-sync.js";
     for (let cursor = date(proposed.date); cursor <= last; cursor = plus(cursor, proposed.weekly ? 7 : 1)) {
       const dayKey = key(cursor);
       const start = date(dayKey, proposed.start);
-      const end = date(dayKey, proposed.end);
+      const end = eventEnd(start, proposed);
       const conflict = instances(start, end).find((item) => item.e.id !== proposed.id && item.s < end && item.z > start);
       if (conflict) return { event: conflict.e, date: dayKey };
     }
@@ -162,8 +303,8 @@ import { CalendarSync } from "./calendar-sync.js";
     const end = $("eventEnd").value;
     const weekly = $("eventWeekly").checked;
     const repeatUntil = $("repeatUntil").value;
-    if (!title || !day || !start || !end || end <= start) {
-      $("formError").textContent = "Add a title and choose an end time after the start. Split overnight shifts at midnight.";
+    if (!title || !day || !start || !end) {
+      $("formError").textContent = "Add a title, date and both times.";
       return;
     }
     if (weekly && (!repeatUntil || repeatUntil < day)) {
@@ -180,6 +321,7 @@ import { CalendarSync } from "./calendar-sync.js";
     else state.events.push(proposed);
     state.selected = day;
     state.month = first(date(day));
+    state.weekStart = week(date(day));
     $("eventDialog").close();
     save();
   };
@@ -204,8 +346,11 @@ import { CalendarSync } from "./calendar-sync.js";
       const low = date(dayKey, startClock);
       const high = date(dayKey, endClock);
       let cursor = low;
-      const blocks = busy.filter((item) => item.d === dayKey)
-        .map((item) => ({ s: new Date(item.s.getTime() - buffer * 60000), z: new Date(item.z.getTime() + buffer * 60000) }))
+      const blocks = busy.filter((item) => item.s < high && item.z > low)
+        .map((item) => ({
+          s: new Date(Math.max(low.getTime(), item.s.getTime() - buffer * 60000)),
+          z: new Date(Math.min(high.getTime(), item.z.getTime() + buffer * 60000))
+        }))
         .sort((a, b) => a.s - b.s);
       blocks.forEach((block) => {
         if (block.z <= cursor || block.s >= high) return;
@@ -297,12 +442,13 @@ import { CalendarSync } from "./calendar-sync.js";
   $("exportButton").onclick = () => {
     const rows = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ClearDay//Personal Planner//EN", "CALSCALE:GREGORIAN"];
     state.events.filter((event) => !isImported(event)).forEach((event) => {
-      const stamp = (day, clock) => {
-        const value = date(day, clock);
-        return `${value.getFullYear()}${String(value.getMonth() + 1).padStart(2, "0")}${String(value.getDate()).padStart(2, "0")}T${String(value.getHours()).padStart(2, "0")}${String(value.getMinutes()).padStart(2, "0")}00`;
-      };
-      rows.push("BEGIN:VEVENT", `UID:${event.id}@clearday.local`, `DTSTART:${stamp(event.date, event.start)}`, `DTEND:${stamp(event.date, event.end)}`, `SUMMARY:${icsEscape(event.title)}`);
-      if (event.weekly) rows.push(`RRULE:FREQ=WEEKLY;UNTIL=${event.repeatUntil.replace(/-/g, "")}T235959`);
+      const stamp = (value) => String(value.getFullYear()) + String(value.getMonth() + 1).padStart(2, "0") +
+        String(value.getDate()).padStart(2, "0") + "T" + String(value.getHours()).padStart(2, "0") +
+        String(value.getMinutes()).padStart(2, "0") + "00";
+      const start = date(event.date, event.start);
+      const end = eventEnd(start, event);
+      rows.push("BEGIN:VEVENT", "UID:" + event.id + "@clearday.local", "DTSTART:" + stamp(start), "DTEND:" + stamp(end), "SUMMARY:" + icsEscape(event.title));
+      if (event.weekly) rows.push("RRULE:FREQ=WEEKLY;UNTIL=" + event.repeatUntil.replace(/-/g, "") + "T235959");
       rows.push("END:VEVENT");
     });
     rows.push("END:VCALENDAR");
@@ -341,9 +487,21 @@ import { CalendarSync } from "./calendar-sync.js";
 
   $("openAddButton").onclick = () => openAdd(state.selected);
   $("addForDay").onclick = () => openAdd(state.selected);
-  $("prevMonth").onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth() - 1, 1); render(); };
-  $("nextMonth").onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth() + 1, 1); render(); };
-  $("todayButton").onclick = () => { state.selected = key(new Date()); state.month = first(new Date()); render(); };
+  $("monthViewButton").onclick = () => { state.view = "month"; state.month = first(date(state.selected)); render(); };
+  $("weekViewButton").onclick = () => { state.view = "week"; state.weekStart = week(date(state.selected)); render(); };
+  $("prevMonth").onclick = () => {
+    if (state.view === "week") { state.weekStart = plus(state.weekStart, -7); state.selected = key(state.weekStart); }
+    else state.month = new Date(state.month.getFullYear(), state.month.getMonth() - 1, 1);
+    render();
+  };
+  $("nextMonth").onclick = () => {
+    if (state.view === "week") { state.weekStart = plus(state.weekStart, 7); state.selected = key(state.weekStart); }
+    else state.month = new Date(state.month.getFullYear(), state.month.getMonth() + 1, 1);
+    render();
+  };
+  $("todayButton").onclick = () => { state.selected = key(new Date()); state.month = first(new Date()); state.weekStart = week(new Date()); render(); };
+  $("dayStart").onchange = $("dayEnd").onchange = $("buffer").onchange = () => { if (state.view === "week") render(); };
+  $("eventStart").onchange = $("eventEnd").onchange = updateOvernightHint;
   $("eventWeekly").onchange = repeatToggle;
   $("closeDialog").onclick = $("cancelDialog").onclick = () => $("eventDialog").close();
   $("todayLabel").textContent = `TODAY · ${nice(new Date(), { weekday: "long", day: "numeric", month: "long" }).toUpperCase()}`;

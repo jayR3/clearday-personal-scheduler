@@ -23,16 +23,23 @@
     </header>
     <main>
       <section class="intro">
-        <div><p class="eyebrow" id="todayLabel">YOUR DAY, WITH ROOM TO BREATHE</p><h1>Make space for what matters.</h1><p class="intro-copy">See your commitments before you say yes. Find open time in seconds.</p></div>
+        <div><p class="eyebrow" id="todayLabel">YOUR DAY, WITH ROOM TO BREATHE</p><h1>Make space for what matters.</h1><p class="intro-copy">See your commitments by month or week, including overnight shifts and the free spaces between them.</p></div>
         <button class="button button-primary add-main" id="openAddButton" type="button"><span aria-hidden="true">＋</span> Add commitment</button>
       </section>
       <section class="dashboard">
         <div class="calendar-panel panel">
           <div class="calendar-heading">
             <div><p class="eyebrow">YOUR SCHEDULE</p><h2 id="monthTitle"></h2></div>
-            <div class="month-controls"><button class="icon-button" id="prevMonth" type="button" aria-label="Previous month">‹</button><button class="button button-today" id="todayButton" type="button">Today</button><button class="icon-button" id="nextMonth" type="button" aria-label="Next month">›</button></div>
+            <div class="calendar-heading-actions">
+              <div class="calendar-view-toggle" role="group" aria-label="Calendar view">
+                <button class="view-toggle-button active" id="monthViewButton" type="button" aria-pressed="true">Month</button>
+                <button class="view-toggle-button" id="weekViewButton" type="button" aria-pressed="false">Week</button>
+              </div>
+              <div class="month-controls"><button class="icon-button" id="prevMonth" type="button" aria-label="Previous month">‹</button><button class="button button-today" id="todayButton" type="button">Today</button><button class="icon-button" id="nextMonth" type="button" aria-label="Next month">›</button></div>
+            </div>
           </div>
           <div class="calendar-grid" id="calendarGrid" aria-label="Monthly calendar"></div>
+          <div class="week-agenda" id="weekGrid" aria-label="Weekly commitments and open time" hidden></div>
           <div class="calendar-foot">
             <div class="legend"><span><i class="legend-dot dot-class"></i>Study</span><span><i class="legend-dot dot-work"></i>Work</span><span><i class="legend-dot dot-health"></i>Health</span><span><i class="legend-dot dot-family"></i>Family</span><span><i class="legend-dot dot-faith"></i>Faith</span><span><i class="legend-dot dot-other"></i>Other</span></div>
             <button class="text-button" id="exportButton" type="button">Export .ics calendar ↗</button>
@@ -86,6 +93,7 @@
         <div><label class="field-label" for="eventStart">Starts</label><input id="eventStart" class="text-input" type="time" value="09:00" required></div>
         <div><label class="field-label" for="eventEnd">Ends</label><input id="eventEnd" class="text-input" type="time" value="10:00" required></div>
       </div>
+      <p class="field-hint" id="overnightHint">If the end time is earlier, this commitment ends the following day.</p>
       <div class="recurrence-row"><label class="check-label"><input id="eventWeekly" type="checkbox"> Repeat every week</label><div id="repeatUntilWrap" class="repeat-until" hidden><label class="field-label" for="repeatUntil">Repeat until</label><input id="repeatUntil" class="text-input" type="date"></div></div>
       <label class="field-label" for="eventNotes">Notes <span class="muted">(optional; stored in this browser)</span></label><input id="eventNotes" class="text-input" type="text" maxlength="120" placeholder="Room or travel time — avoid sensitive details">
       <div class="modal-actions"><button class="button button-danger" id="deleteEvent" type="button" hidden>Delete</button><span class="action-spacer"></span><button class="button button-quiet" id="cancelDialog" type="button">Cancel</button><button class="button button-primary" id="saveEvent" type="submit">Save commitment</button></div>
