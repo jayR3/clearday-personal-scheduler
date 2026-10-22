@@ -23,7 +23,7 @@
     </header>
     <main>
       <section class="intro">
-        <div><p class="eyebrow" id="todayLabel">YOUR DAY, WITH ROOM TO BREATHE</p><h1>Make space for what matters.</h1><p class="intro-copy">See your commitments by month or week, including overnight shifts and the free spaces between them.</p></div>
+        <div><p class="eyebrow" id="todayLabel">YOUR DAY, WITH ROOM TO BREATHE</p><h1>Make space for what matters.</h1><p class="intro-copy">See a compact list for one day, or browse your commitments by week and month.</p></div>
         <button class="button button-primary add-main" id="openAddButton" type="button"><span aria-hidden="true">＋</span> Add commitment</button>
       </section>
       <section class="dashboard">
@@ -34,26 +34,28 @@
               <div class="calendar-view-toggle" role="group" aria-label="Calendar view">
                 <button class="view-toggle-button active" id="monthViewButton" type="button" aria-pressed="true">Month</button>
                 <button class="view-toggle-button" id="weekViewButton" type="button" aria-pressed="false">Week</button>
+                <button class="view-toggle-button" id="dayViewButton" type="button" aria-pressed="false">Day</button>
               </div>
               <div class="month-controls"><button class="icon-button" id="prevMonth" type="button" aria-label="Previous month">‹</button><button class="button button-today" id="todayButton" type="button">Today</button><button class="icon-button" id="nextMonth" type="button" aria-label="Next month">›</button></div>
             </div>
           </div>
           <div class="calendar-grid" id="calendarGrid" aria-label="Monthly calendar"></div>
           <div class="week-agenda" id="weekGrid" aria-label="Weekly commitments and open time" hidden></div>
+          <div class="day-agenda" id="dayGrid" aria-label="All activities for selected date" hidden><div class="day-agenda-toolbar"><span id="dayAgendaCount"></span><button class="button button-secondary" id="dayAddButton" type="button">＋ Add commitment</button></div><div class="day-agenda-events day-events" id="dayAgendaEvents"></div></div>
           <div class="calendar-foot">
             <div class="legend"><span><i class="legend-dot dot-class"></i>Study</span><span><i class="legend-dot dot-work"></i>Work</span><span><i class="legend-dot dot-health"></i>Health</span><span><i class="legend-dot dot-family"></i>Family</span><span><i class="legend-dot dot-faith"></i>Faith</span><span><i class="legend-dot dot-other"></i>Other</span></div>
             <button class="text-button" id="exportButton" type="button">Export .ics calendar ↗</button>
           </div>
         </div>
         <aside class="side-column">
-          <section class="panel day-panel">
+          <section class="panel day-panel" id="dayPanel">
             <div class="panel-heading"><div><p class="eyebrow">SELECTED DAY</p><h2 id="selectedDateTitle"></h2></div><button class="icon-button small" id="addForDay" type="button" aria-label="Add commitment on selected day">＋</button></div>
             <div id="dayEvents" class="day-events"></div>
           </section>
           <section class="panel availability-panel">
             <div class="panel-heading availability-heading"><div><p class="eyebrow">CHECK AVAILABILITY</p><h2>Find a free time</h2></div></div>
             <form id="availabilityForm" class="availability-form">
-              <div class="field-row"><label class="field-label" for="duration">Time needed</label><label class="field-label" for="searchDate">Date</label></div>
+              <div class="field-row"><label class="field-label" for="duration">Time needed</label><label class="field-label" for="searchDate">Date · view day</label></div>
               <div class="field-row">
                 <select id="duration" class="text-input"><option value="1">1 hour</option><option value="2">2 hours</option><option value="3">3 hours</option><option value="4" selected>4 hours</option><option value="6">6 hours</option><option value="8">8 hours</option></select>
                 <input id="searchDate" class="text-input" type="date" required>

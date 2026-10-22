@@ -27,6 +27,7 @@ import { CalendarSync } from "./calendar-sync.js";
   function save() {
     try {
       localStorage.setItem(KEY, JSON.stringify(state.events));
+      $("availabilityResults").innerHTML = "";
       render();
       window.dispatchEvent(new CustomEvent("clearday:schedule-updated"));
     } catch (_) {
@@ -108,7 +109,7 @@ import { CalendarSync } from "./calendar-sync.js";
     const selectedDayEnd = plus(selectedDay, 1);
     $("selectedDateTitle").textContent = nice(selectedDay);
     const dayItems = instances(selectedDay, selectedDayEnd);
-    $("dayEvents").innerHTML = dayItems.length ? dayItems.map((item) => {
+    const activities = dayItems.length ? dayItems.map((item) => {
       const continuesFromEarlier = item.s < selectedDay;
       const segmentStart = continuesFromEarlier ? selectedDay : item.s;
       const segmentEnd = item.z > selectedDayEnd ? selectedDayEnd : item.z;
@@ -116,23 +117,44 @@ import { CalendarSync } from "./calendar-sync.js";
         ? "Busy time · " + safe(item.e.providerOrigin)
         : (item.e.weekly ? "Weekly" : "Commitment") + (item.e.notes ? " · " + safe(item.e.notes) : "");
       const continuity = (continuesFromEarlier ? " · continues from prior day" : "") + (item.z > selectedDayEnd ? " · continues next day" : "");
-      const action = isImported(item.e) ? "" : '<button class="event-edit" data-edit="' + safe(item.e.id) + '" aria-label="Edit ' + safe(item.e.title) + '">···</button>';
+      const action = isImported(item.e) ? "" : '<button class="event-edit" data-edit="' + safe(item.e.id) + '" aria-label="Edit ' + safe(item.e.title) + '">Edit</button>';
       return '<div class="event-row"><div class="event-time">' + (continuesFromEarlier ? "Continues" : tm(segmentStart)) + '<br><span>to ' + tm(segmentEnd) + (item.z > selectedDayEnd ? ' · midnight' : '') + '</span></div><i class="event-rail ' + cat(item.e) + '"></i><div><div class="event-name">' + safe(item.e.title) + '</div><div class="event-meta">' + meta + safe(continuity) + '</div></div>' + action + '</div>';
-    }).join("") : '<div class="empty-day">Nothing scheduled yet. Add your fixed commitments first, then check availability here.</div>';
-    $("dayEvents").querySelectorAll("[data-edit]").forEach((button) => { button.onclick = () => edit(button.dataset.edit); });
+    }).join("") : '<div class="empty-day">No activities on this date. Add a commitment to get started.</div>';
+    $("dayEvents").innerHTML = activities;
+    $("dayAgendaEvents").innerHTML = activities;
+    $("dayAgendaCount").textContent = dayItems.length ? (dayItems.length === 1 ? "1 activity" : dayItems.length + " activities") : "No activities";
+    ["dayEvents", "dayAgendaEvents"].forEach((containerId) => {
+      $(containerId).querySelectorAll("[data-edit]").forEach((button) => {
+        button.onclick = () => edit(button.dataset.edit);
+      });
+    });
+    $("dayAddButton").onclick = () => openAdd(state.selected);
   }
 
   function render() {
+    const isMonth = state.view === "month";
     const isWeek = state.view === "week";
+    const isDay = state.view === "day";
     const today = key(new Date());
-    $("monthViewButton").classList.toggle("active", !isWeek);
+    $("searchDate").value = state.selected;
+    $("monthViewButton").classList.toggle("active", isMonth);
     $("weekViewButton").classList.toggle("active", isWeek);
-    $("monthViewButton").setAttribute("aria-pressed", String(!isWeek));
+    $("dayViewButton").classList.toggle("active", isDay);
+    $("monthViewButton").setAttribute("aria-pressed", String(isMonth));
     $("weekViewButton").setAttribute("aria-pressed", String(isWeek));
-    $("prevMonth").setAttribute("aria-label", isWeek ? "Previous week" : "Previous month");
-    $("nextMonth").setAttribute("aria-label", isWeek ? "Next week" : "Next month");
-    $("calendarGrid").hidden = isWeek;
+    $("dayViewButton").setAttribute("aria-pressed", String(isDay));
+    $("prevMonth").setAttribute("aria-label", isWeek ? "Previous week" : isDay ? "Previous day" : "Previous month");
+    $("nextMonth").setAttribute("aria-label", isWeek ? "Next week" : isDay ? "Next day" : "Next month");
+    $("calendarGrid").hidden = !isMonth;
     $("weekGrid").hidden = !isWeek;
+    $("dayGrid").hidden = !isDay;
+    $("dayPanel").hidden = isDay;
+
+    if (isDay) {
+      $("monthTitle").textContent = nice(date(state.selected), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      renderSelectedDay();
+      return;
+    }
 
     if (isWeek) {
       const weekStart = state.weekStart || week(date(state.selected));
@@ -182,11 +204,7 @@ import { CalendarSync } from "./calendar-sync.js";
         : "Set a same-day time window under Schedule Check to see free spaces.";
       $("weekGrid").innerHTML = '<p class="week-agenda-note">' + safe(note) + '</p>' + rows;
       $("weekGrid").querySelectorAll("[data-select]").forEach((button) => {
-        button.onclick = () => {
-          state.selected = button.dataset.select;
-          state.month = first(date(state.selected));
-          render();
-        };
+        button.onclick = () => selectDate(button.dataset.select);
       });
       $("weekGrid").querySelectorAll("[data-edit]").forEach((button) => {
         button.onclick = () => edit(button.dataset.edit);
@@ -226,7 +244,7 @@ import { CalendarSync } from "./calendar-sync.js";
     });
     $("calendarGrid").innerHTML = html;
     $("calendarGrid").querySelectorAll("[data-select]").forEach((button) => {
-      button.onclick = () => { state.selected = button.dataset.select; state.weekStart = week(date(state.selected)); render(); };
+      button.onclick = () => selectDate(button.dataset.select);
     });
     $("calendarGrid").querySelectorAll("[data-edit]").forEach((button) => {
       button.onclick = () => edit(button.dataset.edit);
@@ -364,7 +382,7 @@ import { CalendarSync } from "./calendar-sync.js";
   $("availabilityForm").onsubmit = (event) => {
     event.preventDefault();
     const hours = Number($("duration").value);
-    const selectedDate = $("searchDate").value;
+    const selectedDate = state.selected;
     const startClock = $("dayStart").value;
     const endClock = $("dayEnd").value;
     const buffer = Number($("buffer").value);
@@ -474,30 +492,36 @@ import { CalendarSync } from "./calendar-sync.js";
     clearSchedule() { state.events = []; save(); }
   };
 
+  function selectDate(dayKey) {
+    state.selected = dayKey;
+    state.month = first(date(dayKey));
+    state.weekStart = week(date(dayKey));
+    $("availabilityResults").innerHTML = "";
+    render();
+  }
+
   $("openAddButton").onclick = () => openAdd(state.selected);
   $("addForDay").onclick = () => openAdd(state.selected);
   $("monthViewButton").onclick = () => { state.view = "month"; state.month = first(date(state.selected)); render(); };
   $("weekViewButton").onclick = () => { state.view = "week"; state.weekStart = week(date(state.selected)); render(); };
+  $("dayViewButton").onclick = () => { state.view = "day"; render(); };
   $("prevMonth").onclick = () => {
-    if (state.view === "week") { state.weekStart = plus(state.weekStart, -7); state.selected = key(state.weekStart); }
-    else state.month = new Date(state.month.getFullYear(), state.month.getMonth() - 1, 1);
-    render();
+    if (state.view === "week") selectDate(key(plus(state.weekStart, -7)));
+    else if (state.view === "day") selectDate(key(plus(date(state.selected), -1)));
+    else { state.month = new Date(state.month.getFullYear(), state.month.getMonth() - 1, 1); render(); }
   };
   $("nextMonth").onclick = () => {
-    if (state.view === "week") { state.weekStart = plus(state.weekStart, 7); state.selected = key(state.weekStart); }
-    else state.month = new Date(state.month.getFullYear(), state.month.getMonth() + 1, 1);
-    render();
+    if (state.view === "week") selectDate(key(plus(state.weekStart, 7)));
+    else if (state.view === "day") selectDate(key(plus(date(state.selected), 1)));
+    else { state.month = new Date(state.month.getFullYear(), state.month.getMonth() + 1, 1); render(); }
   };
-  $("todayButton").onclick = () => { state.selected = key(new Date()); state.month = first(new Date()); state.weekStart = week(new Date()); render(); };
+  $("todayButton").onclick = () => selectDate(key(new Date()));
   $("dayStart").onchange = $("dayEnd").onchange = $("buffer").onchange = () => { if (state.view === "week") render(); };
+  $("searchDate").onchange = () => { if ($("searchDate").value) { state.view = "day"; selectDate($("searchDate").value); } };
   $("eventStart").onchange = $("eventEnd").onchange = updateOvernightHint;
   $("eventWeekly").onchange = repeatToggle;
   $("closeDialog").onclick = $("cancelDialog").onclick = () => $("eventDialog").close();
   $("todayLabel").textContent = `TODAY · ${nice(new Date(), { weekday: "long", day: "numeric", month: "long" }).toUpperCase()}`;
-
-  const searchDate = $("searchDate");
-  searchDate.min = key(new Date());
-  searchDate.value = key(plus(new Date(), 1));
 
   CalendarSync.init();
   render();
