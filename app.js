@@ -86,7 +86,7 @@ import { CalendarSync } from "./calendar-sync.js";
     const low = key(now) === dayKey && now > dayStart ? now : dayStart;
     if (dayEnd <= low) return [];
     const padding = Math.max(0, Number(buffer) || 0) * 60000;
-    const blocks = instances(low, dayEnd)
+    const blocks = instances(new Date(low.getTime() - padding), new Date(dayEnd.getTime() + padding))
       .map((item) => ({
         s: new Date(Math.max(low.getTime(), item.s.getTime() - padding)),
         z: new Date(Math.min(dayEnd.getTime(), item.z.getTime() + padding))
@@ -332,53 +332,51 @@ import { CalendarSync } from "./calendar-sync.js";
     save();
   };
 
-  function slots(minutesNeeded, days, startClock, endClock, buffer) {
+  function slots(minutesNeeded, dayKey, startClock, endClock, buffer) {
+    if (!startClock || !endClock || endClock <= startClock) return [];
+    const dayStart = date(dayKey, startClock);
+    const dayEnd = date(dayKey, endClock);
     const now = new Date();
-    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const to = plus(from, days);
-    const startParts = startClock.split(":").map(Number);
-    const endParts = endClock.split(":").map(Number);
-    if (endParts[0] * 60 + endParts[1] <= startParts[0] * 60 + startParts[1]) return [];
-    const busy = instances(from, to);
+    const low = key(now) === dayKey && now > dayStart ? now : dayStart;
+    if (dayEnd <= low) return [];
+    const padding = Math.max(0, Number(buffer) || 0) * 60000;
+    const busy = instances(new Date(low.getTime() - padding), new Date(dayEnd.getTime() + padding));
+    const blocks = busy
+      .map((item) => ({
+        s: new Date(Math.max(low.getTime(), item.s.getTime() - padding)),
+        z: new Date(Math.min(dayEnd.getTime(), item.z.getTime() + padding))
+      }))
+      .filter((item) => item.z > item.s)
+      .sort((a, b) => a.s - b.s);
     const output = [];
-    for (let day = new Date(from); day < to; day = plus(day, 1)) {
-      const dayKey = key(day);
-      const low = date(dayKey, startClock);
-      const high = date(dayKey, endClock);
-      let cursor = low;
-      const blocks = busy.filter((item) => item.s < high && item.z > low)
-        .map((item) => ({
-          s: new Date(Math.max(low.getTime(), item.s.getTime() - buffer * 60000)),
-          z: new Date(Math.min(high.getTime(), item.z.getTime() + buffer * 60000))
-        }))
-        .sort((a, b) => a.s - b.s);
-      blocks.forEach((block) => {
-        if (block.z <= cursor || block.s >= high) return;
-        const stop = block.s < high ? block.s : high;
-        if (stop - cursor >= minutesNeeded * 60000) output.push({ s: new Date(cursor), z: new Date(cursor.getTime() + minutesNeeded * 60000) });
-        if (block.z > cursor) cursor = block.z;
-      });
-      if (high - cursor >= minutesNeeded * 60000) output.push({ s: new Date(cursor), z: new Date(cursor.getTime() + minutesNeeded * 60000) });
-    }
+    let cursor = low;
+    blocks.forEach((block) => {
+      if (block.z <= cursor || block.s >= dayEnd) return;
+      if (block.s > cursor && block.s - cursor >= minutesNeeded * 60000) {
+        output.push({ s: new Date(cursor), z: new Date(cursor.getTime() + minutesNeeded * 60000) });
+      }
+      if (block.z > cursor) cursor = block.z;
+    });
+    if (dayEnd - cursor >= minutesNeeded * 60000) output.push({ s: new Date(cursor), z: new Date(cursor.getTime() + minutesNeeded * 60000) });
     return output.slice(0, 6);
   }
 
   $("availabilityForm").onsubmit = (event) => {
     event.preventDefault();
     const hours = Number($("duration").value);
-    const days = Number($("daysAhead").value);
+    const selectedDate = $("searchDate").value;
     const startClock = $("dayStart").value;
     const endClock = $("dayEnd").value;
     const buffer = Number($("buffer").value);
-    const found = slots(Math.round(hours * 60), days, startClock, endClock, buffer);
-    const period = days === 1 ? "tomorrow" : "the next " + days + " days, starting tomorrow";
-    const startLabel = tm(date(key(new Date()), startClock));
-    const endLabel = tm(date(key(new Date()), endClock));
+    const found = slots(Math.round(hours * 60), selectedDate, startClock, endClock, buffer);
+    const dateLabel = nice(date(selectedDate), { weekday: "long", day: "numeric", month: "long" });
+    const startLabel = tm(date(selectedDate, startClock));
+    const endLabel = tm(date(selectedDate, endClock));
     const gapLabel = buffer === 0 ? "no extra gap around events" : buffer + "-minute gap around events";
-    const summary = "Looking for a " + hours + "-hour opening " + period + ", between " + startLabel + " and " + endLabel + ", with a " + gapLabel + ".";
+    const summary = "Looking for a " + hours + "-hour opening on " + dateLabel + ", between " + startLabel + " and " + endLabel + ", with a " + gapLabel + ".";
 
     if (!found.length) {
-      $("availabilityResults").innerHTML = '<p class="result-note">' + safe(summary) + ' No matching opening was found. Try a longer search period or a shorter time block.</p>';
+      $("availabilityResults").innerHTML = '<p class="result-note">' + safe(summary) + ' No matching opening was found. Choose another date, widen the hours or shorten the time block.</p>';
       return;
     }
     $("availabilityResults").innerHTML = '<p class="result-note">' + safe(summary) + '</p>' + found.map((slot, index) =>
@@ -496,6 +494,10 @@ import { CalendarSync } from "./calendar-sync.js";
   $("eventWeekly").onchange = repeatToggle;
   $("closeDialog").onclick = $("cancelDialog").onclick = () => $("eventDialog").close();
   $("todayLabel").textContent = `TODAY · ${nice(new Date(), { weekday: "long", day: "numeric", month: "long" }).toUpperCase()}`;
+
+  const searchDate = $("searchDate");
+  searchDate.min = key(new Date());
+  searchDate.value = key(plus(new Date(), 1));
 
   CalendarSync.init();
   render();

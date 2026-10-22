@@ -53,10 +53,10 @@
           <section class="panel availability-panel">
             <div class="panel-heading availability-heading"><div><p class="eyebrow">CHECK AVAILABILITY</p><h2>Find a free time</h2></div></div>
             <form id="availabilityForm" class="availability-form">
-              <div class="field-row"><label class="field-label" for="duration">Time needed</label><label class="field-label" for="daysAhead">Search period</label></div>
+              <div class="field-row"><label class="field-label" for="duration">Time needed</label><label class="field-label" for="searchDate">Date</label></div>
               <div class="field-row">
                 <select id="duration" class="text-input"><option value="1">1 hour</option><option value="2">2 hours</option><option value="3">3 hours</option><option value="4" selected>4 hours</option><option value="6">6 hours</option><option value="8">8 hours</option></select>
-                <select id="daysAhead" class="text-input"><option value="1">Tomorrow</option><option value="3">Next 3 days</option><option value="7" selected>Next 7 days</option><option value="14">Next 14 days</option><option value="30">Next 30 days</option></select>
+                <input id="searchDate" class="text-input" type="date" required>
               </div>
               <div class="field-row time-row"><label class="field-label" for="dayStart">Start after</label><label class="field-label" for="dayEnd">Finish by</label><label class="field-label" for="buffer">Gap around events</label></div>
               <div class="field-row time-row"><input id="dayStart" class="text-input" type="time" value="08:00"><input id="dayEnd" class="text-input" type="time" value="20:00"><select id="buffer" class="text-input"><option value="0">0 min</option><option value="15" selected>15 min</option><option value="30">30 min</option></select></div>
