@@ -365,43 +365,34 @@ import { CalendarSync } from "./calendar-sync.js";
 
   $("availabilityForm").onsubmit = (event) => {
     event.preventDefault();
-    const query = $("requestText").value;
-    let hours = Number($("duration").value);
-    let days = Number($("daysAhead").value);
-    const start = $("dayStart").value;
-    let end = $("dayEnd").value;
+    const hours = Number($("duration").value);
+    const days = Number($("daysAhead").value);
+    const startClock = $("dayStart").value;
+    const endClock = $("dayEnd").value;
     const buffer = Number($("buffer").value);
-    const durationMatch = query.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)/i);
-    if (durationMatch) hours = Math.max(0.5, Math.min(12, Number(durationMatch[1])));
-    const horizonMatch = query.match(/\b(tomorrow|next 3 days|next week|next 14 days|next 30 days)\b/i);
-    if (horizonMatch) days = ({ tomorrow: 1, "next 3 days": 3, "next week": 7, "next 14 days": 14, "next 30 days": 30 })[horizonMatch[1].toLowerCase()];
-    const before = query.match(/before\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-    if (before) {
-      let hour = Number(before[1]); const minute = Number(before[2] || 0); const suffix = (before[3] || "").toLowerCase();
-      if (suffix === "pm" && hour < 12) hour += 12;
-      if (suffix === "am" && hour === 12) hour = 0;
-      end = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-    }
-    const after = query.match(/after\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-    let startClock = start;
-    if (after) {
-      let hour = Number(after[1]); const minute = Number(after[2] || 0); const suffix = (after[3] || "").toLowerCase();
-      if (suffix === "pm" && hour < 12) hour += 12;
-      if (suffix === "am" && hour === 12) hour = 0;
-      startClock = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-    }
-    const found = slots(Math.round(hours * 60), days, startClock, end, buffer);
+    const found = slots(Math.round(hours * 60), days, startClock, endClock, buffer);
+    const period = days === 1 ? "tomorrow" : "the next " + days + " days, starting tomorrow";
+    const startLabel = tm(date(key(new Date()), startClock));
+    const endLabel = tm(date(key(new Date()), endClock));
+    const gapLabel = buffer === 0 ? "no extra gap around events" : buffer + "-minute gap around events";
+    const summary = "Looking for a " + hours + "-hour opening " + period + ", between " + startLabel + " and " + endLabel + ", with a " + gapLabel + ".";
+
     if (!found.length) {
-      $("availabilityResults").innerHTML = `<div class="result-note">No open block of ${safe(`${hours} hours`)} found. Try more days, a shorter block or a wider time range.</div>`;
+      $("availabilityResults").innerHTML = '<p class="result-note">' + safe(summary) + ' No matching opening was found. Try a longer search period or a shorter time block.</p>';
       return;
     }
-    $("availabilityResults").innerHTML = '<div class="result-note">Open blocks start tomorrow and use the commitments saved here. Confirm the time before you promise it.</div>' + found.map((slot, index) =>
-      `<div class="slot-card"><div class="slot-main"><div class="slot-date">${nice(slot.s, { weekday: "short", day: "numeric", month: "short" })}${index === 0 ? " · soonest" : ""}</div><div class="slot-time">${tm(slot.s)} – ${tm(slot.z)}</div></div><div class="slot-actions"><button class="slot-action" data-copy="${slot.s.toISOString()}" data-copy-end="${slot.z.toISOString()}">Copy</button><button class="slot-action" data-block="${key(slot.s)}" data-start="${time(slot.s)}" data-end="${time(slot.z)}">Block</button></div></div>`
+    $("availabilityResults").innerHTML = '<p class="result-note">' + safe(summary) + '</p>' + found.map((slot, index) =>
+      '<div class="slot-card"><div class="slot-main"><div class="slot-date">' +
+      nice(slot.s, { weekday: "short", day: "numeric", month: "short" }) + (index === 0 ? " · soonest" : "") +
+      '</div><div class="slot-time">' + tm(slot.s) + ' – ' + tm(slot.z) +
+      '</div></div><div class="slot-actions"><button class="slot-action" data-copy="' + slot.s.toISOString() +
+      '" data-copy-end="' + slot.z.toISOString() + '">Copy</button><button class="slot-action" data-block="' +
+      key(slot.s) + '" data-start="' + time(slot.s) + '" data-end="' + time(slot.z) + '">Block</button></div></div>'
     ).join("");
     $("availabilityResults").querySelectorAll("[data-copy]").forEach((button) => {
       button.onclick = async () => {
         const startTime = new Date(button.dataset.copy); const endTime = new Date(button.dataset.copyEnd);
-        try { await navigator.clipboard.writeText(`${nice(startTime)}, ${tm(startTime)}–${tm(endTime)}`); button.textContent = "Copied"; }
+        try { await navigator.clipboard.writeText(nice(startTime) + ", " + tm(startTime) + "–" + tm(endTime)); button.textContent = "Copied"; }
         catch (_) { button.textContent = "Copy unavailable"; }
         setTimeout(() => { button.textContent = "Copy"; }, 1500);
       };

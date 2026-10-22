@@ -51,17 +51,14 @@
             <div id="dayEvents" class="day-events"></div>
           </section>
           <section class="panel availability-panel">
-            <div class="panel-heading availability-heading"><div><p class="eyebrow">SCHEDULE CHECK</p><h2>Before you say yes</h2></div><span class="spark-icon" aria-hidden="true">✳</span></div>
-            <p class="small-copy">This checks commitments in ClearDay and calendar blocks you have imported. It is a rules-based check, not AI; confirm the details before accepting.</p>
+            <div class="panel-heading availability-heading"><div><p class="eyebrow">CHECK AVAILABILITY</p><h2>Find a free time</h2></div></div>
             <form id="availabilityForm" class="availability-form">
-              <label class="field-label" for="requestText">Quick request <span class="muted">(optional)</span></label>
-              <input id="requestText" class="text-input" type="text" placeholder="e.g. 4 hours tomorrow, before 6pm" autocomplete="off">
-              <div class="field-row"><label class="field-label" for="duration">Hours needed</label><label class="field-label" for="daysAhead">Look ahead</label></div>
+              <div class="field-row"><label class="field-label" for="duration">Time needed</label><label class="field-label" for="daysAhead">Search period</label></div>
               <div class="field-row">
                 <select id="duration" class="text-input"><option value="1">1 hour</option><option value="2">2 hours</option><option value="3">3 hours</option><option value="4" selected>4 hours</option><option value="6">6 hours</option><option value="8">8 hours</option></select>
                 <select id="daysAhead" class="text-input"><option value="1">Tomorrow</option><option value="3">Next 3 days</option><option value="7" selected>Next 7 days</option><option value="14">Next 14 days</option><option value="30">Next 30 days</option></select>
               </div>
-              <div class="field-row time-row"><label class="field-label" for="dayStart">From</label><label class="field-label" for="dayEnd">Until</label><label class="field-label" for="buffer">Buffer</label></div>
+              <div class="field-row time-row"><label class="field-label" for="dayStart">Start after</label><label class="field-label" for="dayEnd">Finish by</label><label class="field-label" for="buffer">Gap around events</label></div>
               <div class="field-row time-row"><input id="dayStart" class="text-input" type="time" value="08:00"><input id="dayEnd" class="text-input" type="time" value="20:00"><select id="buffer" class="text-input"><option value="0">0 min</option><option value="15" selected>15 min</option><option value="30">30 min</option></select></div>
               <button class="button button-primary full-width" type="submit">Find open times <span aria-hidden="true">→</span></button>
             </form>
